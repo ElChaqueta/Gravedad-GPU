@@ -1,0 +1,55 @@
+#pragma kernel CSMain
+
+
+
+struct ShipGPU
+{
+    float3 pos;
+    float mass;
+};
+
+struct PlanetGPU
+{
+    float3 pos;
+    float mass;
+};
+
+StructuredBuffer<ShipGPU> Ships;
+StructuredBuffer<PlanetGPU> Planets;
+RWStructuredBuffer<float3> OutForces;
+
+int ShipCount;
+int PlanetCount;
+
+static const float EPSILON = 1e-4;
+
+// Calcula la fuerza gravitatoria ejercida por un planeta sobre una nave.
+float3 CalcForceBetween(ShipGPU s, PlanetGPU p)
+{
+    float3 delta = p.pos - s.pos;
+    float sqDist = dot(delta, delta);
+    sqDist = max(sqDist, EPSILON);
+    float dist = sqrt(sqDist);
+    float3 dir = delta / dist;
+    float magnitude = (s.mass * p.mass) / (sqDist + EPSILON);
+    return dir * magnitude;
+}
+
+[numthreads(64, 1, 1)]
+void CSMain(uint id : SV_DispatchThreadID)
+{
+    if (id >= ShipCount)
+        return;
+
+    ShipGPU s = Ships[id];
+    float3 accumulated = float3(0.0, 0.0, 0.0);
+
+    // Iterar por todos los planetas y sumar fuerzas
+    for (uint i = 0u; i < (uint)PlanetCount; ++i)
+    {
+        PlanetGPU p = Planets[i];
+        accumulated += CalcForceBetween(s, p);
+    }
+
+    OutForces[id] = accumulated;
+}
