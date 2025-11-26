@@ -1,0 +1,45 @@
+#pragma kernel CSMain
+
+struct Ship
+{
+    float3 position;
+    float mass;
+};
+
+struct Planet
+{
+    float3 position;
+    float mass;
+};
+
+StructuredBuffer<Ship> Ships;
+StructuredBuffer<Planet> Planets;
+RWStructuredBuffer<float3> OutForces;
+
+int ShipCount;
+int PlanetCount;
+
+[numthreads(64, 1, 1)]
+void CSMain(uint id : SV_DispatchThreadID)
+{
+    if (id >= ShipCount)
+        return;
+
+    Ship s = Ships[id];
+    float3 totalForce = float3(0, 0, 0);
+
+    for (uint i = 0; i < PlanetCount; i++)
+    {
+        Planet p = Planets[i];
+
+        float3 dir = p.position - s.position;
+        float dist = length(dir);
+        float safeDist = max(dist, 0.0001);
+        float3 norm = dir / safeDist;
+
+        float forceScalar = (s.mass * p.mass) / (safeDist * safeDist + 0.0001);
+        totalForce += norm * forceScalar;
+    }
+
+    OutForces[id] = totalForce;
+}

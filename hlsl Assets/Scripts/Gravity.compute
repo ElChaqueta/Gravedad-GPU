@@ -1,0 +1,70 @@
+#pragma kernel CSMain
+
+struct PlanetData
+{
+    float2 position;
+    float2 velocity;
+    float mass;
+    float radius;
+    float2 padding;
+};
+
+struct ShipData
+{
+    float2 position;
+    float2 velocity;
+    float2 acceleration;
+    float mass;
+    float2 padding;
+};
+
+RWStructuredBuffer<ShipData> ships;
+StructuredBuffer<PlanetData> planets;
+
+int planetCount;
+int shipCount;
+float deltaTime;
+
+// Constante gravitacional
+static const float G = 6.67430e-11f * 1000f; // Escalada para Unity
+
+[numthreads(64, 1, 1)]
+void CSMain(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= (uint)shipCount)
+        return;
+
+    ShipData ship = ships[id.x];
+    
+    // Reiniciar aceleración
+    ship.acceleration = float2(0, 0);
+
+    // Calcular fuerza gravitacional de todos los planetas
+    for (int i = 0; i < planetCount; i++)
+    {
+        PlanetData planet = planets[i];
+        
+        // Vector dirección
+        float2 dir = planet.position - ship.position;
+        float distance = length(dir);
+        
+        // Evitar división por cero y distancias muy pequeñas
+        if (distance > 0.1f && distance < planet.radius * 10f)
+        {
+            // Normalizar dirección
+            dir = normalize(dir);
+            
+            // Ley de gravitación universal: F = G * (m1 * m2) / r^2
+            float forceMagnitude = G * (planet.mass * ship.mass) / (distance * distance);
+            
+            // Aplicar fuerza (F = m * a => a = F / m)
+            ship.acceleration += dir * (forceMagnitude / ship.mass);
+        }
+    }
+
+    // Integrar movimiento (Euler simple)
+    ship.velocity += ship.acceleration * deltaTime;
+    ship.position += ship.velocity * deltaTime;
+
+    ships[id.x] = ship;
+}
